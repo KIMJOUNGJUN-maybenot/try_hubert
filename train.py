@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # 하이퍼파라미터 및 설정
 BATCH_SIZE = 16
-LEARNING_RATE = 2e-4  # 초기 학습률을 기존보다 크게 설정
+LEARNING_RATE = 1e-4  # 초기 학습률을 기존보다 크게 설정 #2024-12-10 LOSS값 때문에 낮게 설정하게 변경
 BETAS = (0.9, 0.98)
 EPS = 1e-06
 WEIGHT_DECAY = 1e-2
@@ -108,7 +108,8 @@ def train(rank, world_size, args):
     scaler = amp.GradScaler()
 
     # 학습률 스케줄러 설정 (StepLR 사용)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)  # 2 에폭마다 학습률을 0.1배로 감소
+    #scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)  # 2 에폭마다 학습률을 0.1배로 감소(원본)
+    #scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)  # 1 에폭마다 학습률을 0.1배로 감소로 확인하여 loss 변화 확인(매 에폭마다 감소로 설정하고 확인해봐야 해당 부분이 문제인지 확인할 수 있을 듯)
 
     # 데이터셋 로드 (Training)
     train_dict_path = args.dataset_dir / "train-clean-dict.ltr.txt"
@@ -172,6 +173,7 @@ def train(rank, world_size, args):
         hubert.train()
         train_loss_metric = Metric()
 
+        
         for batch_idx, (wavs, targets) in enumerate(train_loader, 1):
             global_step += 1
             wavs, targets = wavs.to(rank), targets.to(rank)
@@ -184,8 +186,16 @@ def train(rank, world_size, args):
                 ee_logits_list = hubert.module.early_exit_outputs(all_layer_outputs)
 
                 # Early Exit Branch 손실 계산
-                losses = [compute_ctc_loss(logits, targets) for logits in ee_logits_list]
-                total_loss = sum(losses) / len(losses)  # 손실의 평균 계산
+                losses = []
+                entropies = []
+                for logits in ee_logits_list:
+                    loss = compute_ctc_loss(logits, targets)
+                    entropy = compute_entropy(torch.log_softmax(logits, dim=-1).unsqueeze(0))
+                    losses.append(loss)
+                    entropies.append(entropy)
+
+                min_entropy_index = torch.argmin(torch.tensor(entropies)).item()
+                total_loss = losses[min_entropy_index]
 
             scaler.scale(total_loss).backward()  # 역전파
             nn.utils.clip_grad_norm_(hubert.parameters(), MAX_NORM)  # Gradient 클리핑
