@@ -1,14 +1,17 @@
 from transformers import Wav2Vec2Processor, HubertForCTC
 
-# 저장 경로 설정
-save_path = "/data1/hslim/PycharmProjects/hubert/models"
+def download_model():
+    model_name = "facebook/hubert-large-ls960-ft"
+    save_path = "C:/Users/kimju/Desktop/hubert"
 
-# 프로세서 다운로드 및 저장
-processor = Wav2Vec2Processor.from_pretrained("facebook/hubert-large-ls960-ft")
-processor.save_pretrained(save_path)
+    # HuggingFace Hub에서 모델과 프로세서 다운로드
+    processor = Wav2Vec2Processor.from_pretrained(model_name)
+    processor.save_pretrained(save_path)
 
-# 모델 다운로드 및 저장
-model = HubertForCTC.from_pretrained("facebook/hubert-large-ls960-ft")
-model.save_pretrained(save_path)
+    model = HubertForCTC.from_pretrained(model_name)
+    model.save_pretrained(save_path)
 
-print(f"Model and processor saved to {save_path}")
+    print(f"Model and processor saved to {save_path}")
+
+if __name__ == "__main__":
+    download_model()
